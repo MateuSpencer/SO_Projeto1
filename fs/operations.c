@@ -139,22 +139,22 @@ int tfs_sym_link(char const *target, char const *link_name) {
 }
 
 int tfs_link(char const *target, char const *link_name) {
-    /*adicionar uma entrada no diretorio em que estou
-    cujo nome é link_name e cujo i number é o i number do inode do target
-    mas o target é só um link para o ficheiro, por isso dado o ficheiro tenho de la ir buscar o seu i number
+    inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+        ALWAYS_ASSERT(root_dir_inode != NULL,"tfs_link: root dir inode must exist");
+    int target_inumber = tfs_lookup(target, root_dir_inode);
+            ALWAYS_ASSERT(target_inumber >0 ,"tfs_open: target_inumber must exist");
+
+    int return_val = add_dir_entry(root_dir_inode, link_name + 1, target_inumber);
+    if(return_val == -1){
+        return -1;
+    }
     
-    */
-    int dir_inumber = 0; //root directory
-    inode_t *dir_inode_ptr = inode_get(dir_inumber);
+    int link_inum = tfs_lookup(link_name, root_dir_inode);
 
-    int target_inumber = find_in_dir(dir_inode_ptr,target);
+    inode_t *target_inode = inode_get(link_inum);
+    target_inode->hard_link_ctr++;
 
-    add_dir_entry(dir_inode_ptr, link_name, target_inumber);
-    //verificar se deu erro
-
-    inode_t *target_inode_ptr = inode_get(target_inumber);
-
-    target_inode_ptr->hard_link_ctr++;
+    return 0;
 
     PANIC("TODO: tfs_link");
 }
@@ -243,10 +243,19 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 }
 
 int tfs_unlink(char const *target) {
-    (void)target;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
-    //TODO
+     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+        ALWAYS_ASSERT(root_dir_inode != NULL,"tfs_open: root dir inode must exist");
+    int target_inumber = tfs_lookup(target, root_dir_inode);
+    if(target_inumber == -1){
+        return -1;
+    }
+    inode_t *target_inode_ptr = inode_get(target_inumber);
+    //ver se não é um diretorio pq acho que nao é para apagar diretorios
+    target_inode_ptr->hard_link_ctr--;
+    if(target_inode_ptr->hard_link_ctr <= 0){
+        inode_delete(target_inumber);
+    }
+    return 0;
 
     PANIC("TODO: tfs_unlink");
 }

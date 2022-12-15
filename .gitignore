@@ -452,3 +452,4 @@ TSWLatexianTemp*
 
 # old files folder
 _old
+*.json

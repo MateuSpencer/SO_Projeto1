@@ -62,11 +62,9 @@ static bool valid_pathname(char const *name) {
  * Returns the inumber of the file, -1 if unsuccessful.
  */
 static int tfs_lookup(char const *name, inode_t const *root_inode) {
-    // TODO: assert that root_inode is the root directory
-    if (!valid_pathname(name)) {
-        return -1;
-    }
-
+    // TODO: assert that root_inode is the root directory - isto kinda ja foi feito, tipo 
+    ALWAYS_ASSERT(root_inode == inode_get(ROOT_DIR_INUM), "tfs_lookup: root_inode must be root directory");
+    if (!valid_pathname(name)) return -1;
     // skip the initial '/' character
     name++;
 
@@ -80,16 +78,14 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     }
 
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
-    ALWAYS_ASSERT(root_dir_inode != NULL,
-                  "tfs_open: root dir inode must exist");
+    ALWAYS_ASSERT(root_dir_inode != NULL,"tfs_open: root dir inode must exist");
     int inum = tfs_lookup(name, root_dir_inode);
     size_t offset;
 
     if (inum >= 0) {
         // The file already exists
         inode_t *inode = inode_get(inum);
-        ALWAYS_ASSERT(inode != NULL,
-                      "tfs_open: directory files must have an inode");
+        ALWAYS_ASSERT(inode != NULL,"tfs_open: directory files must have an inode");
 
         // Truncate (if requested)
         if (mode & TFS_O_TRUNC) {
@@ -137,15 +133,28 @@ int tfs_sym_link(char const *target, char const *link_name) {
     (void)link_name;
     // ^ this is a trick to keep the compiler from complaining about unused
     // variables. TODO: remove
+    //TODO - um ficheiro diferente
 
     PANIC("TODO: tfs_sym_link");
 }
 
 int tfs_link(char const *target, char const *link_name) {
-    (void)target;
-    (void)link_name;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
+    /*adicionar uma entrada no diretorio em que estou
+    cujo nome é link_name e cujo i number é o i number do inode do target
+    mas o target é só um link para o ficheiro, por isso dado o ficheiro tenho de la ir buscar o seu i number
+    
+    */
+    int dir_inumber = 0; //root directory
+    inode_t *dir_inode_ptr = inode_get(dir_inumber);
+
+    int target_inumber = find_in_dir(dir_inode_ptr,target);
+
+    add_dir_entry(dir_inode_ptr, link_name, target_inumber);
+    //verificar se deu erro
+
+    inode_t *target_inode_ptr = inode_get(target_inumber);
+
+    target_inode_ptr->hard_link_ctr++;
 
     PANIC("TODO: tfs_link");
 }
@@ -237,15 +246,41 @@ int tfs_unlink(char const *target) {
     (void)target;
     // ^ this is a trick to keep the compiler from complaining about unused
     // variables. TODO: remove
+    //TODO
 
     PANIC("TODO: tfs_unlink");
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
-    (void)source_path;
-    (void)dest_path;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
+    char buffer[state_block_size()];
+    FILE *source_fp = fopen(source_path, "r");
+
+    if(source_fp == NULL){
+        return -1;
+    }
+    
+    /* Seek to the beginning of the file */
+    fseek(source_fp, 0, SEEK_SET);
+    /* read the contents of the file */
+    size_t bytes_read = fread(buffer, sizeof(char),state_block_size(),source_fp);
+    if (bytes_read == 0){
+        if(!feof(source_fp)){
+            return -1;
+        }
+        return 0;
+    }
+    fclose(source_fp);
+
+    int dest_file_handle = tfs_open(dest_path, TFS_O_TRUNC | TFS_O_CREAT);
+    if(dest_file_handle == -1){
+        return -1;
+    }
+
+    tfs_write(dest_file_handle, buffer, bytes_read);
+
+    tfs_close(dest_file_handle);
+
+    return 0;
 
     PANIC("TODO: tfs_copy_from_external_fs");
 }

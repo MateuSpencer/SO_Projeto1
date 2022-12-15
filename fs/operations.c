@@ -87,6 +87,26 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         inode_t *inode = inode_get(inum);
         ALWAYS_ASSERT(inode != NULL,"tfs_open: directory files must have an inode");
 
+        while(inode->i_node_type == T_SYMLINK){
+            char *buffer = NULL;
+            int sym_file_handle = add_to_open_file_table(inum, 0);
+            if(tfs_read(sym_file_handle, buffer, inode->i_size) == -1){
+                return -1;
+            }
+            tfs_close(sym_file_handle);
+            inum = tfs_lookup(buffer, root_dir_inode);
+            if( inum == -1 ){
+                return -1;
+            }
+            inode = inode_get(inum);
+                ALWAYS_ASSERT(inode != NULL,"tfs_open: directory files must have an inode");
+        }
+    /*
+    ver se o inode for do tipo symlink, entao ir look up o ficheiro e se com o path que ta la guardado
+    apamhar o i number desse ficheiro e depois agarrar o inode desse ficheiro
+    e depois ver se é do tipo symlink, se for repete ( por dentro de um while inode é não um symlink)
+    */
+
         // Truncate (if requested)
         if (mode & TFS_O_TRUNC) {
             if (inode->i_size > 0) {
@@ -129,13 +149,25 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 }
 
 int tfs_sym_link(char const *target, char const *link_name) {
-    (void)target;
-    (void)link_name;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
-    //TODO - um ficheiro diferente
+    //ou abrir com tfs_open mas especificar o tipo T_SYMLINK e depois guardar la com tfs_write
+    int inum = inode_create(T_SYMLINK);
+    if (inum == -1) {
+        return -1; // no space in inode table
+    }
+    inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+        ALWAYS_ASSERT(root_dir_inode != NULL,"tfs_link: root dir inode must exist");
+    if (add_dir_entry(root_dir_inode, link_name + 1, inum) == -1) {
+        inode_delete(inum);
+        return -1; // no space in directory
+    }
+    size_t size = strlen(target);
+    int sym_file_handle = add_to_open_file_table(inum, 0);
+    if(tfs_write(sym_file_handle, target, size) == -1){//TODO SECÇÃO CRITICA, mas probs controlar isso dentro do tfs q
+        return -1;
+    }
+    tfs_close(sym_file_handle);
 
-    PANIC("TODO: tfs_sym_link");
+    return 0;
 }
 
 int tfs_link(char const *target, char const *link_name) {
@@ -150,7 +182,6 @@ int tfs_link(char const *target, char const *link_name) {
     target_inode->hard_link_ctr++;
 
     return 0;
-    PANIC("TODO: tfs_link");
 }
 
 int tfs_close(int fhandle) {
@@ -250,8 +281,6 @@ int tfs_unlink(char const *target) {
         inode_delete(target_inumber);
     }
     return 0;
-
-    PANIC("TODO: tfs_unlink");
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
@@ -279,11 +308,11 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
         return -1;
     }
 
-    tfs_write(dest_file_handle, buffer, bytes_read);
+    if(tfs_write(dest_file_handle, buffer, bytes_read) == -1){
+        return -1;
+    }
 
     tfs_close(dest_file_handle);
 
     return 0;
-
-    PANIC("TODO: tfs_copy_from_external_fs");
 }

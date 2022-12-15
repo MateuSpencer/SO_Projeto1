@@ -142,20 +142,14 @@ int tfs_link(char const *target, char const *link_name) {
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
         ALWAYS_ASSERT(root_dir_inode != NULL,"tfs_link: root dir inode must exist");
     int target_inumber = tfs_lookup(target, root_dir_inode);
-            ALWAYS_ASSERT(target_inumber >0 ,"tfs_open: target_inumber must exist");
-
-    int return_val = add_dir_entry(root_dir_inode, link_name + 1, target_inumber);
-    if(return_val == -1){
+        ALWAYS_ASSERT(target_inumber >0 ,"tfs_open: target_inumber must exist");
+    if(add_dir_entry(root_dir_inode, link_name + 1, target_inumber) == -1){
         return -1;
     }
-    
-    int link_inum = tfs_lookup(link_name, root_dir_inode);
-
-    inode_t *target_inode = inode_get(link_inum);
+    inode_t *target_inode = inode_get(target_inumber);
     target_inode->hard_link_ctr++;
 
     return 0;
-
     PANIC("TODO: tfs_link");
 }
 

@@ -174,7 +174,9 @@ int tfs_link(char const *target, char const *link_name) {
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
         ALWAYS_ASSERT(root_dir_inode != NULL,"tfs_link: root dir inode must exist");
     int target_inumber = tfs_lookup(target, root_dir_inode);
-        ALWAYS_ASSERT(target_inumber >0 ,"tfs_open: target_inumber must exist");
+    if(target_inumber == -1){
+        return -1;
+    }
     if(add_dir_entry(root_dir_inode, link_name + 1, target_inumber) == -1){
         return -1;
     }
@@ -268,17 +270,19 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 }
 
 int tfs_unlink(char const *target) {
-     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
+    inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
         ALWAYS_ASSERT(root_dir_inode != NULL,"tfs_open: root dir inode must exist");
     int target_inumber = tfs_lookup(target, root_dir_inode);
     if(target_inumber == -1){
         return -1;
     }
     inode_t *target_inode_ptr = inode_get(target_inumber);
-    //ver se não é um diretorio pq acho que nao é para apagar diretorios
+    //ver se não é um diretorio
+    //ver se nao esta aberto
     target_inode_ptr->hard_link_ctr--;
     if(target_inode_ptr->hard_link_ctr <= 0){
         inode_delete(target_inumber);
+        //apagar entry do diretorio
     }
     return 0;
 }

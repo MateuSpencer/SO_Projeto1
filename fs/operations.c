@@ -86,15 +86,16 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         // The file already exists
         inode_t *inode = inode_get(inum);
         ALWAYS_ASSERT(inode != NULL,"tfs_open: directory files must have an inode");
-
+            
         while(inode->i_node_type == T_SYMLINK){
-            char *buffer = NULL;
+            char *buffer = (char*)calloc(inode->i_size,sizeof(char));
             int sym_file_handle = add_to_open_file_table(inum, 0);
             if(tfs_read(sym_file_handle, buffer, inode->i_size) == -1){
                 return -1;
             }
             tfs_close(sym_file_handle);
             inum = tfs_lookup(buffer, root_dir_inode);
+            free(buffer);
             if( inum == -1 ){
                 return -1;
             }

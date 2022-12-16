@@ -87,7 +87,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         inode_t *inode = inode_get(inum);
         ALWAYS_ASSERT(inode != NULL,"tfs_open: directory files must have an inode");
             
-        while(inode->i_node_type == T_SYMLINK){
+        while(inode->i_node_type == T_SYMLINK){//TODO este tipo de cenas nao precisa de mutex?
             char *buffer = (char*)calloc(inode->i_size,sizeof(char));
             int sym_file_handle = add_to_open_file_table(inum, 0);
             if(tfs_read(sym_file_handle, buffer, inode->i_size) == -1){
@@ -97,16 +97,11 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
             inum = tfs_lookup(buffer, root_dir_inode);
             free(buffer);
             if( inum == -1 ){
-                return -1;
+                return -1;//broken link
             }
             inode = inode_get(inum);
                 ALWAYS_ASSERT(inode != NULL,"tfs_open: directory files must have an inode");
         }
-    /*
-    ver se o inode for do tipo symlink, entao ir look up o ficheiro e se com o path que ta la guardado
-    apamhar o i number desse ficheiro e depois agarrar o inode desse ficheiro
-    e depois ver se é do tipo symlink, se for repete ( por dentro de um while inode é não um symlink)
-    */
 
         // Truncate (if requested)
         if (mode & TFS_O_TRUNC) {
@@ -163,7 +158,7 @@ int tfs_sym_link(char const *target, char const *link_name) {
     }
     size_t size = strlen(target);
     int sym_file_handle = add_to_open_file_table(inum, 0);
-    if(tfs_write(sym_file_handle, target, size) == -1){//TODO SECÇÃO CRITICA, mas probs controlar isso dentro do tfs q
+    if(tfs_write(sym_file_handle, target, size) == -1){
         return -1;
     }
     tfs_close(sym_file_handle);
@@ -198,6 +193,8 @@ int tfs_close(int fhandle) {
 
     remove_from_open_file_table(fhandle);
 
+    //ver se tem 0 hardlinks e apagar?
+
     return 0;
 }
 
@@ -231,7 +228,8 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
         void *block = data_block_get(inode->i_data_block);
         ALWAYS_ASSERT(block != NULL, "tfs_write: data block deleted mid-write");
 
-        // Perform the actual write
+        // Perform the actual write 
+        //TODO Secção critica
         memcpy(block + file->of_offset, buffer, to_write);
 
         // The offset associated with the file handle is incremented accordingly
@@ -265,6 +263,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         ALWAYS_ASSERT(block != NULL, "tfs_read: data block deleted mid-read");
 
         // Perform the actual read
+        //TODO Secção critica 
         memcpy(buffer, block + file->of_offset, to_read);
         // The offset associated with the file handle is incremented accordingly
         file->of_offset += to_read;
@@ -284,11 +283,15 @@ int tfs_unlink(char const *target) {
     if (target_inode->i_node_type == T_DIRECTORY){
         return -1;
     }
-    target_inode->hard_link_ctr--;
-    //if it is open, it should not delete the inode, when i close it, if it has 0 hardlinks then it deletes, pode ate chamar o unk«link again
+    target_inode->hard_link_ctr--;//TODO secção critica?
+    //if it is open, it should not delete the inode, when i close it if it has 0 hardlinks then it deletes, pode ate chamar o unk«link again
     if(target_inode->hard_link_ctr <= 0 ){
         inode_delete(target_inumber);
-        //remove from directory
+        // skip the initial '/' character
+        target++;
+        if(clear_dir_entry(root_dir_inode,target) == -1){
+            return -1;
+        }
     }
     return 0;
 }

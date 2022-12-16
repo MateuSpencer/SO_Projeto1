@@ -178,10 +178,13 @@ int tfs_link(char const *target, char const *link_name) {
     if(target_inumber == -1){
         return -1;
     }
+    inode_t *target_inode = inode_get(target_inumber);
+    if(target_inode->i_node_type == T_SYMLINK){
+        return -1;
+    }
     if(add_dir_entry(root_dir_inode, link_name + 1, target_inumber) == -1){
         return -1;
     }
-    inode_t *target_inode = inode_get(target_inumber);
     target_inode->hard_link_ctr++;
 
     return 0;
@@ -277,13 +280,15 @@ int tfs_unlink(char const *target) {
     if(target_inumber == -1){
         return -1;
     }
-    inode_t *target_inode_ptr = inode_get(target_inumber);
-    //ver se não é um diretorio
-    //ver se nao esta aberto
-    target_inode_ptr->hard_link_ctr--;
-    if(target_inode_ptr->hard_link_ctr <= 0){
+    inode_t *target_inode = inode_get(target_inumber);
+    if (target_inode->i_node_type == T_DIRECTORY){
+        return -1;
+    }
+    target_inode->hard_link_ctr--;
+    //if it is open, it should not delete the inode, when i close it, if it has 0 hardlinks then it deletes, pode ate chamar o unk«link again
+    if(target_inode->hard_link_ctr <= 0 ){
         inode_delete(target_inumber);
-        //apagar entry do diretorio
+        //remove from directory
     }
     return 0;
 }

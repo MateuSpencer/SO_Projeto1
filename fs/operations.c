@@ -6,7 +6,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <pthread.h>
+
 #include "betterassert.h"
+
+static pthread_mutex_t tfs_read_mutex;
+static pthread_mutex_t tfs_write_mutex;
 
 tfs_params tfs_default_params() {
     tfs_params params = {
@@ -29,6 +34,8 @@ int tfs_init(tfs_params const *params_ptr) {
     if (state_init(params) != 0) {
         return -1;
     }
+    pthread_mutex_init(&tfs_read_mutex,NULL);
+    pthread_mutex_init(&tfs_write_mutex,NULL);
 
     // create root inode
     int root = inode_create(T_DIRECTORY);
@@ -43,6 +50,8 @@ int tfs_destroy() {
     if (state_destroy() != 0) {
         return -1;
     }
+    pthread_mutex_destroy(&tfs_read_mutex);
+    pthread_mutex_destroy(&tfs_write_mutex);
     return 0;
 }
 

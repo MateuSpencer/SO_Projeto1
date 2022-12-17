@@ -22,6 +22,11 @@ TARGET_EXECS := $(patsubst %.c,%,$(wildcard tests/*.c))
 vpath # clears VPATH
 vpath %.h $(INCLUDE_DIRS)
 
+# Multi-threading flags
+LDFLAGS += -pthread
+# fsanitize flags
+ LDFLAGS += -fsanitize=thread
+
 CFLAGS += -std=c17 -D_POSIX_C_SOURCE=200809L
 CFLAGS += $(INCLUDES)
 

@@ -10,8 +10,7 @@
 
 #include "betterassert.h"
 
-static pthread_mutex_t tfs_read_mutex;
-static pthread_mutex_t tfs_write_mutex;
+static pthread_mutex_t tfs_open_mutex;
 
 tfs_params tfs_default_params() {
     tfs_params params = {
@@ -34,9 +33,7 @@ int tfs_init(tfs_params const *params_ptr) {
     if (state_init(params) != 0) {
         return -1;
     }
-    pthread_mutex_init(&tfs_read_mutex,NULL);
-    pthread_mutex_init(&tfs_write_mutex,NULL);
-
+    pthread_mutex_init(&tfs_open_mutex, NULL);
     // create root inode
     int root = inode_create(T_DIRECTORY);
     if (root != ROOT_DIR_INUM) {
@@ -50,8 +47,7 @@ int tfs_destroy() {
     if (state_destroy() != 0) {
         return -1;
     }
-    pthread_mutex_destroy(&tfs_read_mutex);
-    pthread_mutex_destroy(&tfs_write_mutex);
+    pthread_mutex_destroy(&tfs_open_mutex);
     return 0;
 }
 
@@ -88,11 +84,13 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
     ALWAYS_ASSERT(root_dir_inode != NULL,"tfs_open: root dir inode must exist");
+
+    pthread_mutex_lock(&tfs_open_mutex);//lock this to k«make sure file file exists, otherwise another thread might create the same file
     int inum = tfs_lookup(name, root_dir_inode);
     size_t offset;
 
     if (inum >= 0) {
-        // The file already exists
+        pthread_mutex_unlock(&tfs_open_mutex);//we can unlock it since it already exists
         inode_t *inode = inode_get(inum);
         ALWAYS_ASSERT(inode != NULL,"tfs_open: directory files must have an inode");
             
@@ -130,18 +128,21 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         // Create inode
         inum = inode_create(T_FILE);
         if (inum == -1) {
+            pthread_mutex_unlock(&tfs_open_mutex);
             return -1; // no space in inode table
         }
 
         // Add entry in the root directory
         if (add_dir_entry(root_dir_inode, name + 1, inum) == -1) {
+            pthread_mutex_unlock(&tfs_open_mutex);
             inode_delete(inum);
             return -1; // no space in directory
         }
-
+        pthread_mutex_unlock(&tfs_open_mutex);
         offset = 0;
     } else {
         return -1;
+        pthread_mutex_unlock(&tfs_open_mutex);
     }
 
     // Finally, add entry to the open file table and return the corresponding
@@ -202,8 +203,6 @@ int tfs_close(int fhandle) {
 
     remove_from_open_file_table(fhandle);
 
-    //ver se tem 0 hardlinks e apagar?
-
     return 0;
 }
 
@@ -256,11 +255,10 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     if (file == NULL) {
         return -1;
     }
-
+    //TODO read lock num inode
     // From the open file table entry, we get the inode
     inode_t const *inode = inode_get(file->of_inumber);
     ALWAYS_ASSERT(inode != NULL, "tfs_read: inode of open file deleted");
-
     // Determine how many bytes to read
     size_t to_read = inode->i_size - file->of_offset;
     if (to_read > len) {
@@ -272,12 +270,10 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         ALWAYS_ASSERT(block != NULL, "tfs_read: data block deleted mid-read");
 
         // Perform the actual read
-        //TODO Secção critica 
         memcpy(buffer, block + file->of_offset, to_read);
         // The offset associated with the file handle is incremented accordingly
         file->of_offset += to_read;
     }
-
     return (ssize_t)to_read;
 }
 
@@ -292,8 +288,8 @@ int tfs_unlink(char const *target) {
     if (target_inode->i_node_type == T_DIRECTORY){
         return -1;
     }
-    target_inode->hard_link_ctr--;//TODO secção critica?
-    //if it is open, it should not delete the inode, when i close it if it has 0 hardlinks then it deletes, pode ate chamar o unk«link again
+    //TODO - ver se esta aberto, e se estiver retornar -1, pq nao quero fechar algo que está aberto
+    target_inode->hard_link_ctr--;
     if(target_inode->hard_link_ctr <= 0 ){
         inode_delete(target_inumber);
         // skip the initial '/' character

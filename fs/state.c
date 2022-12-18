@@ -32,7 +32,7 @@ static pthread_rwlock_t free_blocks_rwlock;
  */
 static open_file_entry_t *open_file_table;
 static allocation_state_t *free_open_file_entries;
-static pthread_mutex_t free_open_file_entries_mutex;
+static pthread_rwlock_t free_open_file_entries_rwlock;
 
 // Convenience macros
 #define INODE_TABLE_SIZE (fs_params.max_inode_count)
@@ -132,7 +132,7 @@ int state_init(tfs_params params) {
         pthread_mutex_init(&open_file_table[i].mutexlock, NULL);
         free_open_file_entries[i] = FREE;
     }
-    pthread_mutex_init(&free_open_file_entries_mutex, NULL);
+    pthread_rwlock_init(&free_open_file_entries_rwlock, NULL);
 
     return 0;
 }
@@ -152,7 +152,7 @@ int state_destroy(void) {
 
     pthread_rwlock_destroy(&freeinode_ts_rwlock);
     pthread_rwlock_destroy(&free_blocks_rwlock);
-    pthread_mutex_destroy(&free_open_file_entries_mutex);
+    pthread_rwlock_destroy(&free_open_file_entries_rwlock);
     
     for (size_t i = 0; i < INODE_TABLE_SIZE; i++) {
         pthread_rwlock_destroy(&inode_table[i].rwlock);
@@ -313,7 +313,6 @@ inode_t *inode_get(int inumber) {
     ALWAYS_ASSERT(valid_inumber(inumber), "inode_get: invalid inumber");
 
     insert_delay(); // simulate storage access delay to inode
-    //TODO  Secção crítica? ou tenho so de meter a volta das chamdas de inode get?
     return &inode_table[inumber];
 }
 
@@ -499,7 +498,7 @@ void *data_block_get(int block_number) {
     ALWAYS_ASSERT(valid_block_number(block_number),"data_block_get: invalid block number");
 
     insert_delay(); // simulate storage access delay to block
-    return &fs_data[(size_t)block_number * BLOCK_SIZE];//Secção critica? if yes how to protect
+    return &fs_data[(size_t)block_number * BLOCK_SIZE];
 }
 
 /**
@@ -515,11 +514,18 @@ void *data_block_get(int block_number) {
  *   - No space in open file table for a new open file.
  */
 int add_to_open_file_table(int inumber, size_t offset) {
-    pthread_mutex_lock(&free_open_file_entries_mutex);
+    pthread_rwlock_rdlock(&free_open_file_entries_rwlock);
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
         if (free_open_file_entries[i] == FREE) {
+            pthread_rwlock_unlock(&free_open_file_entries_rwlock);
+            pthread_rwlock_wrlock(&free_open_file_entries_rwlock);
+            if(free_open_file_entries[i] != FREE){
+                pthread_rwlock_unlock(&free_open_file_entries_rwlock);
+                pthread_rwlock_rdlock(&free_open_file_entries_rwlock);
+                continue;
+            }
             free_open_file_entries[i] = TAKEN;
-            pthread_mutex_unlock(&free_open_file_entries_mutex);
+            pthread_rwlock_unlock(&free_open_file_entries_rwlock);
             pthread_mutex_lock(&open_file_table[i].mutexlock);
             open_file_table[i].of_inumber = inumber;
             open_file_table[i].of_offset = offset;
@@ -527,7 +533,7 @@ int add_to_open_file_table(int inumber, size_t offset) {
             return i;
         }
     }
-    pthread_mutex_unlock(&free_open_file_entries_mutex);
+    pthread_rwlock_unlock(&free_open_file_entries_rwlock);
     return -1;
 }
 
@@ -540,9 +546,9 @@ int add_to_open_file_table(int inumber, size_t offset) {
 void remove_from_open_file_table(int fhandle) {
     ALWAYS_ASSERT(valid_file_handle(fhandle),"remove_from_open_file_table: file handle must be valid");
     ALWAYS_ASSERT(free_open_file_entries[fhandle] == TAKEN,"remove_from_open_file_table: file handle must be taken");
-    pthread_mutex_lock(&free_open_file_entries_mutex);
+    pthread_rwlock_wrlock(&free_open_file_entries_rwlock);
     free_open_file_entries[fhandle] = FREE;
-    pthread_mutex_unlock(&free_open_file_entries_mutex);
+    pthread_rwlock_unlock(&free_open_file_entries_rwlock);
 }
 
 /**
@@ -555,16 +561,43 @@ void remove_from_open_file_table(int fhandle) {
  * opened.
  */
 open_file_entry_t *get_open_file_entry(int fhandle) {
-    pthread_mutex_lock(&free_open_file_entries_mutex);//TODO isto devia ser um rwlock e lock read
+    pthread_rwlock_rdlock(&free_open_file_entries_rwlock);
     if (!valid_file_handle(fhandle)) {
-        pthread_mutex_unlock(&free_open_file_entries_mutex);
+        pthread_rwlock_unlock(&free_open_file_entries_rwlock);
         return NULL;
     }
 
     if (free_open_file_entries[fhandle] != TAKEN) {
-        pthread_mutex_unlock(&free_open_file_entries_mutex);
+        pthread_rwlock_unlock(&free_open_file_entries_rwlock);
         return NULL;
     }
-    pthread_mutex_unlock(&free_open_file_entries_mutex);//what about reurning isto? nao devia tar protegido?
+    pthread_rwlock_unlock(&free_open_file_entries_rwlock);
     return &open_file_table[fhandle];
+}
+
+
+/**
+ * see if a file is open
+ *
+ * Input:
+ *   - inumber: inode inumber
+ *
+ * Returns 0 if it is open, -1 otherwise
+ */
+int find_open_file (int inumber){
+    pthread_rwlock_rdlock(&free_open_file_entries_rwlock);
+    for(int i = 0; i > MAX_OPEN_FILES; i++){
+        if (free_open_file_entries[i] == TAKEN){
+            pthread_mutex_lock(&open_file_table[i].mutexlock);
+            if(open_file_table[i].of_inumber == inumber ) {
+            pthread_mutex_unlock(&open_file_table[i].mutexlock);
+            pthread_rwlock_unlock(&free_open_file_entries_rwlock);
+            return 0;
+            }
+            pthread_mutex_unlock(&open_file_table[i].mutexlock);
+        }
+        
+    }
+    pthread_rwlock_unlock(&free_open_file_entries_rwlock);
+    return -1;
 }

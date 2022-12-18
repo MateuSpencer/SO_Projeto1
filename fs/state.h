@@ -64,5 +64,6 @@ void *data_block_get(int block_number);
 int add_to_open_file_table(int inumber, size_t offset);
 void remove_from_open_file_table(int fhandle);
 open_file_entry_t *get_open_file_entry(int fhandle);
+int find_open_file (int inumber);
 
 #endif // STATE_H

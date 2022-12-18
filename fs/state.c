@@ -299,6 +299,7 @@ void inode_delete(int inumber) {
     pthread_rwlock_unlock(&inode_table[inumber].rwlock);
     freeinode_ts[inumber] = FREE;
     pthread_rwlock_unlock(&freeinode_ts_rwlock);
+
 }
 
 /**
@@ -586,7 +587,7 @@ open_file_entry_t *get_open_file_entry(int fhandle) {
  */
 int find_open_file (int inumber){
     pthread_rwlock_rdlock(&free_open_file_entries_rwlock);
-    for(int i = 0; i > MAX_OPEN_FILES; i++){
+    for(int i = 0; i < MAX_OPEN_FILES; i++){
         if (free_open_file_entries[i] == TAKEN){
             pthread_mutex_lock(&open_file_table[i].mutexlock);
             if(open_file_table[i].of_inumber == inumber ) {

@@ -411,7 +411,7 @@ int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
  *   - inode is not a directory inode.
  *   - Directory does not contain a file named sub_name.
  */
-int find_in_dir(inode_t const *inode, char const *sub_name) {
+int find_in_dir(inode_t *inode, char const *sub_name) {
     ALWAYS_ASSERT(inode != NULL, "find_in_dir: inode must be non-NULL");
     ALWAYS_ASSERT(sub_name != NULL, "find_in_dir: sub_name must be non-NULL");
 

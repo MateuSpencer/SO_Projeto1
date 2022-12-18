@@ -66,8 +66,7 @@ static bool valid_pathname(char const *name) {
  *   - root_inode: the root directory inode
  * Returns the inumber of the file, -1 if unsuccessful.
  */
-static int tfs_lookup(char const *name, inode_t const *root_inode) {
-    // TODO: assert that root_inode is the root directory - isto kinda ja foi feito, tipo 
+static int tfs_lookup(char const *name, inode_t *root_inode) {
     ALWAYS_ASSERT(root_inode == inode_get(ROOT_DIR_INUM), "tfs_lookup: root_inode must be root directory");
     if (!valid_pathname(name)) return -1;
     // skip the initial '/' character

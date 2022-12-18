@@ -328,17 +328,20 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     fseek(source_fp, 0, SEEK_SET);
     /* read the contents of the file */
     size_t bytes_read = fread(buffer, sizeof(char),state_block_size(),source_fp);
-    if (bytes_read == 0){
-        if(!feof(source_fp)){
-            return -1;
-        }
-        return 0;
+    fgetc(source_fp);//advance 1 character to check if its the end of file in limit case
+    if(!feof(source_fp)){
+        return -1;//too big to copy fully
     }
+    
     fclose(source_fp);
 
     int dest_file_handle = tfs_open(dest_path, TFS_O_TRUNC | TFS_O_CREAT);
     if(dest_file_handle == -1){
         return -1;
+    }
+    if (bytes_read == 0){
+        tfs_close(dest_file_handle);//nothing to copy, so close it and exit
+        return 0;
     }
 
     if(tfs_write(dest_file_handle, buffer, bytes_read) == -1){

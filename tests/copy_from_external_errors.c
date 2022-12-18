@@ -17,7 +17,11 @@ int main() {
     // Scenario 1: source file does not exist
     assert(tfs_copy_from_external_fs("./unexistent", path1) == -1);
 
-    // TODO: add more failure scenarios
+    //file too big to copy fully, so it does not copy
+    assert(tfs_copy_from_external_fs("tests/file_to_copy_too_big.txt", path1) == -1);
+    //valid file, but invalid path names
+    assert(tfs_copy_from_external_fs("tests/empty_file.txt", "f1") == -1);
+    assert(tfs_copy_from_external_fs("tests/empty_file.txt", "/") == -1);
 
     printf("Successful test.\n");
 

@@ -51,7 +51,6 @@ int main() {
         assert(pthread_join(tid[i], NULL) == 0);
     }
 
-    printf("\n");printf("\n");printf("\n");printf("\n");
     //check if file contents are correct
     for (int file_i = 0; file_i < FILE_COUNT; ++file_i){
         for (int thread_i = 0; thread_i < THREAD_COUNT; ++thread_i) {

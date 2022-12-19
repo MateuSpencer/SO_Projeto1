@@ -140,8 +140,8 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         pthread_mutex_unlock(&tfs_open_mutex);
         offset = 0;
     } else {
-        return -1;
         pthread_mutex_unlock(&tfs_open_mutex);
+        return -1;
     }
 
     // Finally, add entry to the open file table and return the corresponding

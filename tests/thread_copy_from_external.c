@@ -41,7 +41,7 @@ int main() {
     pthread_t tid[THREAD_COUNT];
     int thread_id[THREAD_COUNT];
 
-    //copy concurrently 3 files many yimes
+    //copy concurrently 3 files many times
     for (int i = 0; i < THREAD_COUNT; ++i) {
         thread_id[i] = i;
         assert(pthread_create(&tid[i], NULL, thread_copy_from_external,(void *)(&thread_id[i])) == 0);
